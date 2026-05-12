@@ -1,0 +1,7 @@
+name=War
+author=Kenny Cason
+description=A chess-like strategy game for two players. Capture the enemy commander or wipe out their attack pieces to win.
+bundleID=com.kennycason.war
+version=1.0
+buildNumber=1
+imagePath=

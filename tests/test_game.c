@@ -241,6 +241,71 @@ static void test_ai_step_walks_depths_in_order(void) {
     ASSERT_FALSE(g.ai_pending);
 }
 
+static int count_highlights_other_than_selected(const Board* b) {
+    int n = 0;
+    for (int x = 0; x < BOARD_DIM; x++) {
+        for (int y = 0; y < BOARD_DIM; y++) {
+            TileHighlight h = b->tiles[x][y].highlight;
+            if (h == HIGHLIGHT_MOVE || h == HIGHLIGHT_ATTACK) n++;
+        }
+    }
+    return n;
+}
+
+static void test_hover_shows_own_piece_moves(void) {
+    GameState g;
+    game_init(&g);
+    game_reset(&g);
+    /* Cursor on black infantry (5,2) — own piece, black's turn. */
+    g.cursor_x = 5; g.cursor_y = 2;
+    game_refresh_highlights(&g);
+    /* It has at least one legal hop east to (6,2). */
+    ASSERT_EQ(g.board.tiles[6][2].highlight, HIGHLIGHT_MOVE);
+    ASSERT_TRUE(count_highlights_other_than_selected(&g.board) > 0);
+}
+
+static void test_hover_shows_enemy_piece_moves(void) {
+    GameState g;
+    game_init(&g);
+    game_reset(&g);
+    /* Cursor on white infantry (5,8). Black's turn — but preview should still
+     * show what THAT piece could do. */
+    g.cursor_x = 5; g.cursor_y = 8;
+    game_refresh_highlights(&g);
+    /* The white infantry can step west to (4,8). */
+    ASSERT_EQ(g.board.tiles[4][8].highlight, HIGHLIGHT_MOVE);
+    ASSERT_TRUE(count_highlights_other_than_selected(&g.board) > 0);
+}
+
+static void test_hover_clears_when_moving_off_piece(void) {
+    GameState g;
+    game_init(&g);
+    game_reset(&g);
+    g.cursor_x = 5; g.cursor_y = 2;
+    game_refresh_highlights(&g);
+    ASSERT_TRUE(count_highlights_other_than_selected(&g.board) > 0);
+
+    /* Move cursor to an empty tile in the middle of the board. */
+    g.cursor_x = 5; g.cursor_y = 5;
+    game_refresh_highlights(&g);
+    ASSERT_EQ(count_highlights_other_than_selected(&g.board), 0);
+}
+
+static void test_move_cursor_updates_hover(void) {
+    GameState g;
+    game_init(&g);
+    game_reset(&g);
+    /* Start over an empty tile. */
+    g.cursor_x = 5; g.cursor_y = 5;
+    game_refresh_highlights(&g);
+    ASSERT_EQ(count_highlights_other_than_selected(&g.board), 0);
+
+    /* Move cursor onto an own piece — hover preview should appear. */
+    while (g.cursor_y > 2) game_move_cursor(&g, 0, -1);
+    ASSERT_EQ(g.cursor_y, 2);
+    ASSERT_TRUE(count_highlights_other_than_selected(&g.board) > 0);
+}
+
 static void test_ai_step_level_1_finishes_in_one_call(void) {
     GameState g;
     game_init(&g);
@@ -276,4 +341,8 @@ void run_game_tests(void) {
     RUN(test_ai_step_eventually_finishes);
     RUN(test_ai_step_walks_depths_in_order);
     RUN(test_ai_step_level_1_finishes_in_one_call);
+    RUN(test_hover_shows_own_piece_moves);
+    RUN(test_hover_shows_enemy_piece_moves);
+    RUN(test_hover_clears_when_moving_off_piece);
+    RUN(test_move_cursor_updates_hover);
 }

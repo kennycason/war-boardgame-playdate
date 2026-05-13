@@ -69,27 +69,26 @@ static void draw_highlight(int sx, int top_y, TileHighlight h) {
     int sy = top_y;
     switch (h) {
     case HIGHLIGHT_SELECTED:
-        pd->graphics->fillRect(sx,                 sy,                 TILE_SIZE, 2, kColorBlack);
-        pd->graphics->fillRect(sx,                 sy + TILE_SIZE - 2, TILE_SIZE, 2, kColorBlack);
-        pd->graphics->fillRect(sx,                 sy,                 2, TILE_SIZE, kColorBlack);
-        pd->graphics->fillRect(sx + TILE_SIZE - 2, sy,                 2, TILE_SIZE, kColorBlack);
+        /* 2px frame around the tile's full 21x21 footprint (matches the
+         * (TILE_SIZE+1) border drawn in draw_tile_top so neighbors share the
+         * rightmost/bottommost column). Centered visually. */
+        pd->graphics->fillRect(sx,                 sy,                 TILE_SIZE + 1, 2, kColorBlack);
+        pd->graphics->fillRect(sx,                 sy + TILE_SIZE - 1, TILE_SIZE + 1, 2, kColorBlack);
+        pd->graphics->fillRect(sx,                 sy,                 2, TILE_SIZE + 1, kColorBlack);
+        pd->graphics->fillRect(sx + TILE_SIZE - 1, sy,                 2, TILE_SIZE + 1, kColorBlack);
         break;
-    case HIGHLIGHT_MOVE: {
-        int cx = sx + TILE_SIZE / 2;
-        int cy = sy + TILE_SIZE - 5;
-        pd->graphics->fillTriangle(cx, cy - 2, cx - 2, cy, cx + 2, cy, kColorBlack);
-        pd->graphics->fillTriangle(cx, cy + 2, cx - 2, cy, cx + 2, cy, kColorBlack);
+    case HIGHLIGHT_MOVE:
+    case HIGHLIGHT_ATTACK: {
+        /* 50% gray dither across the tile interior. Pieces draw on top so on
+         * an ATTACK destination only the 1-2px ring around the piece shows;
+         * empty MOVE destinations fully fill with the dither. */
+        static const uint8_t s_highlight_dither[16] = {
+            0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+        };
+        pd->graphics->fillRect(sx + 1, sy + 1, TILE_SIZE - 1, TILE_SIZE - 1,
+                               (LCDColor)(uintptr_t)s_highlight_dither);
     } break;
-    case HIGHLIGHT_ATTACK:
-        pd->graphics->fillRect(sx + 1,             sy + 1,             4, 1, kColorBlack);
-        pd->graphics->fillRect(sx + 1,             sy + 1,             1, 4, kColorBlack);
-        pd->graphics->fillRect(sx + TILE_SIZE - 5, sy + 1,             4, 1, kColorBlack);
-        pd->graphics->fillRect(sx + TILE_SIZE - 2, sy + 1,             1, 4, kColorBlack);
-        pd->graphics->fillRect(sx + 1,             sy + TILE_SIZE - 2, 4, 1, kColorBlack);
-        pd->graphics->fillRect(sx + 1,             sy + TILE_SIZE - 5, 1, 4, kColorBlack);
-        pd->graphics->fillRect(sx + TILE_SIZE - 5, sy + TILE_SIZE - 2, 4, 1, kColorBlack);
-        pd->graphics->fillRect(sx + TILE_SIZE - 2, sy + TILE_SIZE - 5, 1, 4, kColorBlack);
-        break;
     default: break;
     }
 }
@@ -293,19 +292,13 @@ static void draw_thick_frame(int sx, int sy, int w, int h) {
     pd->graphics->fillRect(sx + w - 2, sy,         2, h, kColorBlack);
 }
 
-/* ---------------- Cursor ---------------- */
-
+/* ---------------- Cursor ----------------
+ * The cursor is rendered as the same SELECTED frame used for an actively
+ * selected piece. This way the visual is consistent: wherever the cursor
+ * is, you see the thick frame; when a piece is locked-selected, ITS tile
+ * also keeps that frame. */
 static void draw_cursor(int sx, int sy) {
-    int L = 5;
-    LCDColor c = (LCDColor)kColorXOR;
-    pd->graphics->fillRect(sx - 1, sy - 1, L, 2, c);
-    pd->graphics->fillRect(sx - 1, sy - 1, 2, L, c);
-    pd->graphics->fillRect(sx + TILE_SIZE - L + 1, sy - 1, L, 2, c);
-    pd->graphics->fillRect(sx + TILE_SIZE - 1,     sy - 1, 2, L, c);
-    pd->graphics->fillRect(sx - 1,                  sy + TILE_SIZE - 1, L, 2, c);
-    pd->graphics->fillRect(sx - 1,                  sy + TILE_SIZE - L + 1, 2, L, c);
-    pd->graphics->fillRect(sx + TILE_SIZE - L + 1,  sy + TILE_SIZE - 1, L, 2, c);
-    pd->graphics->fillRect(sx + TILE_SIZE - 1,      sy + TILE_SIZE - L + 1, 2, L, c);
+    draw_highlight(sx, sy, HIGHLIGHT_SELECTED);
 }
 
 /* ---------------- Hourglass ---------------- */

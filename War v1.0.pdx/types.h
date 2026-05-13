@@ -50,34 +50,8 @@ typedef enum {
 typedef enum {
     GAME_MODE_FREE,           /* cursor floats, no piece selected */
     GAME_MODE_PIECE_SELECTED, /* a piece is selected, cursor picks destination */
-    GAME_MODE_AI_THINKING,    /* AI is computing its move */
     GAME_MODE_GAME_OVER,
     GAME_MODE_TITLE,
 } GameMode;
-
-typedef enum {
-    MATCH_PVP = 0,
-    MATCH_PVA = 1,
-} MatchType;
-
-typedef enum {
-    AI_EASY   = 0, /* depth 1 */
-    AI_NORMAL = 1, /* depth 2 */
-    AI_HARD   = 2, /* depth 3, time-budgeted */
-} AIDifficulty;
-
-typedef enum {
-    RENDER_FLAT     = 0,
-    RENDER_ELEVATED = 1,
-} RenderMode;
-
-typedef struct {
-    MatchType    match;
-    AIDifficulty ai_difficulty;
-    Player       ai_player;   /* which color the AI controls in PvA */
-    RenderMode   render;
-} Settings;
-
-#define HISTORY_CAP 200
 
 #endif

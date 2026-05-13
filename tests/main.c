@@ -11,12 +11,16 @@ void run_piece_tests(void);
 void run_board_tests(void);
 void run_move_tests(void);
 void run_game_tests(void);
+void run_ai_tests(void);
+void run_history_tests(void);
 
 int main(void) {
     run_piece_tests();
     run_board_tests();
     run_move_tests();
     run_game_tests();
+    run_ai_tests();
+    run_history_tests();
 
     printf("\n----------------------------------------\n");
     printf("Total: %d assertions, %d failed\n", g_test_count, g_test_failed);

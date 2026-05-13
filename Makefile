@@ -19,6 +19,8 @@ SRC = Source/main.c \
       Source/piece.c \
       Source/move.c \
       Source/game.c \
+      Source/ai.c \
+      Source/history.c \
       Source/render.c \
       Source/input.c
 

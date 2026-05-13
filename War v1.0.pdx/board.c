@@ -35,20 +35,20 @@ void board_clear_highlights(Board* b) {
 }
 
 void board_setup_terrain(Board* b) {
-    /* Default terrain from the Kotlin DefaultTerrainV2Generator, indexed
-     * [x][y]. Intentionally asymmetric — that's how the original plays. */
+    /* Symmetric hill pattern — peaks in the central region with a small crater
+     * at the exact center. Designed so neither side gets a starting advantage. */
     static const int elev[BOARD_DIM][BOARD_DIM] = {
-        {2,2,1,0,3,3,0,0,0,0,0},  /* x=0 */
-        {2,1,1,0,0,0,0,0,0,0,0},  /* x=1 */
-        {1,1,1,1,0,1,2,1,0,0,0},  /* x=2 */
-        {0,1,1,1,1,2,2,1,0,0,0},  /* x=3 */
-        {0,0,1,2,3,3,3,2,0,0,1},  /* x=4 */
-        {0,0,1,3,3,3,3,3,0,0,2},  /* x=5 */
-        {0,0,0,2,3,3,3,3,0,0,0},  /* x=6 */
-        {0,0,0,1,3,3,2,1,0,0,0},  /* x=7 */
-        {0,0,0,0,0,0,0,0,0,1,2},  /* x=8 */
-        {0,0,0,0,0,0,0,0,1,1,1},  /* x=9 */
-        {0,0,0,0,0,3,0,0,1,2,2},  /* x=10 */
+        {0,0,1,1,1,1,1,1,1,0,0},
+        {0,1,1,2,2,2,2,2,1,1,0},
+        {1,1,2,2,3,3,3,2,2,1,1},
+        {1,2,2,3,3,3,3,3,2,2,1},
+        {1,2,3,3,3,2,3,3,3,2,1},
+        {1,2,3,3,2,1,2,3,3,2,1},
+        {1,2,3,3,3,2,3,3,3,2,1},
+        {1,2,2,3,3,3,3,3,2,2,1},
+        {1,1,2,2,3,3,3,2,2,1,1},
+        {0,1,1,2,2,2,2,2,1,1,0},
+        {0,0,1,1,1,1,1,1,1,0,0},
     };
     for (int x = 0; x < BOARD_DIM; x++) {
         for (int y = 0; y < BOARD_DIM; y++) {

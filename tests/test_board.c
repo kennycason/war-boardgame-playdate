@@ -61,14 +61,22 @@ static void test_board_setup_specific_pieces(void) {
     ASSERT_EQ(b.tiles[7][10].piece.type, PIECE_TANK);
 }
 
-static void test_board_terrain_is_symmetric(void) {
+static void test_board_terrain_matches_kotlin_default(void) {
     Board b;
     board_init(&b);
     board_setup_terrain(&b);
+    /* Spot-check a few known cells from DefaultTerrainV2Generator. */
+    ASSERT_EQ(b.tiles[0][0].elevation,  2);
+    ASSERT_EQ(b.tiles[0][4].elevation,  3);
+    ASSERT_EQ(b.tiles[5][3].elevation,  3);
+    ASSERT_EQ(b.tiles[5][5].elevation,  3);
+    ASSERT_EQ(b.tiles[10][10].elevation, 2);
+    ASSERT_EQ(b.tiles[10][5].elevation,  3);
+    /* All elevations within [0, MAX_ELEVATION]. */
     for (int x = 0; x < BOARD_DIM; x++) {
         for (int y = 0; y < BOARD_DIM; y++) {
-            ASSERT_EQ(b.tiles[x][y].elevation,
-                      b.tiles[BOARD_DIM - 1 - x][BOARD_DIM - 1 - y].elevation);
+            int e = b.tiles[x][y].elevation;
+            ASSERT_TRUE(e >= 0 && e <= MAX_ELEVATION);
         }
     }
 }
@@ -116,7 +124,7 @@ void run_board_tests(void) {
     RUN(test_board_in_bounds);
     RUN(test_board_setup_places_36_pieces);
     RUN(test_board_setup_specific_pieces);
-    RUN(test_board_terrain_is_symmetric);
+    RUN(test_board_terrain_matches_kotlin_default);
     RUN(test_board_check_win_commander_dead);
     RUN(test_board_check_win_no_attack_pieces);
     RUN(test_board_clear_highlights);

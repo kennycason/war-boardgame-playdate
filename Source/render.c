@@ -4,8 +4,9 @@
 #include "piece.h"
 
 static PlaydateAPI* pd          = NULL;
-static LCDFont*     font_body   = NULL;
-static LCDFont*     font_big    = NULL;
+static LCDFont*     font_body   = NULL; /* sidebar/in-game text, 14pt light */
+static LCDFont*     font_big    = NULL; /* sidebar scores + title rows, 14pt bold */
+static LCDFont*     font_title  = NULL; /* the "WAR" title — 24pt light */
 static int          frame_count = 0;
 
 /* ---------------- Layout helpers ---------------- */
@@ -520,49 +521,57 @@ static void draw_sidebar(GameState* g) {
 
 /* ---------------- Title menu ---------------- */
 
+/* Title menu rows use font_big (bold) — the marker arrow text-width is
+ * measured with the same font so wrapping stays correct at any size. */
 static void draw_menu_row(const char* label, const char* value, int x, int y,
                           bool selected, bool has_arrows) {
+    LCDFont* f = font_big;
     if (selected) draw_text(">", x, y);
-    draw_text(label, x + 16, y);
+    draw_text(label, x + 18, y);
     if (value) {
-        int val_x = x + 140;
-        int val_w = pd->graphics->getTextWidth(font_body, value, strlen(value), kASCIIEncoding, 0);
+        int val_x = x + 160;
+        int val_w = pd->graphics->getTextWidth(f, value, strlen(value), kASCIIEncoding, 0);
         if (has_arrows && selected) {
-            int lt_w = pd->graphics->getTextWidth(font_body, "<", 1, kASCIIEncoding, 0);
-            draw_text("<", val_x - lt_w - 6, y);
+            int lt_w = pd->graphics->getTextWidth(f, "<", 1, kASCIIEncoding, 0);
+            draw_text("<", val_x - lt_w - 8, y);
         }
         draw_text(value, val_x, y);
-        if (has_arrows && selected) draw_text(">", val_x + val_w + 4, y);
+        if (has_arrows && selected) draw_text(">", val_x + val_w + 6, y);
     }
 }
 
 static void draw_title(const GameState* g) {
     pd->graphics->clear(kColorWhite);
 
+    /* Big "WAR" using the 24pt title font — taller than the rest of the
+     * menu. */
+    pd->graphics->setFont(font_title);
+    draw_text_centered_with(font_title, "W A R", LCD_COLUMNS / 2, 14);
+    pd->graphics->drawLine(70, 52, LCD_COLUMNS - 70, 52, 1, kColorBlack);
+
+    /* All menu rows + instructions use the same bold 14pt font for a
+     * consistent look. */
     pd->graphics->setFont(font_big);
-    draw_text_centered_with(font_big, "W A R", LCD_COLUMNS / 2, 24);
-    pd->graphics->drawLine(80, 50, LCD_COLUMNS - 80, 50, 1, kColorBlack);
 
-    pd->graphics->setFont(font_body);
-
-    int x = 80;
-    int y = 70;
+    int x = 60;
+    int y = 66;
     draw_menu_row("Player vs Player", NULL, x, y, g->menu_row == 0, false);
-    y += 24;
+    y += 22;
     draw_menu_row("Player vs AI",     NULL, x, y, g->menu_row == 1, false);
-    y += 32;
+    y += 28;
     char lvlbuf[8];
     snprintf(lvlbuf, sizeof(lvlbuf), "L%d", g->settings.ai_level);
-    draw_menu_row("AI level",   lvlbuf,
-                  x, y, g->menu_row == 2, true);
+    draw_menu_row("AI level", lvlbuf, x, y, g->menu_row == 2, true);
     y += 22;
-    draw_menu_row("Render",     g->settings.render == RENDER_FLAT ? "FLAT" : "ELEVATED",
+    draw_menu_row("Render",
+                  g->settings.render == RENDER_FLAT ? "FLAT" : "ELEVATED",
                   x, y, g->menu_row == 3, true);
-    y += 30;
+    y += 28;
 
-    pd->graphics->drawLine(80, y, LCD_COLUMNS - 80, y, 1, kColorBlack);
-    y += 6;
-    draw_text_centered_with(font_body, "A : start    crank : AI level", LCD_COLUMNS / 2, y);
+    pd->graphics->drawLine(70, y, LCD_COLUMNS - 70, y, 1, kColorBlack);
+    y += 4;
+    draw_text_centered_with(font_big, "A : start   crank : AI level",
+                            LCD_COLUMNS / 2, y);
 }
 
 /* ---------------- Game-over overlay ---------------- */
@@ -597,6 +606,8 @@ void render_init(PlaydateAPI* api) {
     }
     font_big = pd->graphics->loadFont("/System/Fonts/Asheville-Sans-14-Bold.pft", &err);
     if (!font_big) font_big = font_body;
+    font_title = pd->graphics->loadFont("/System/Fonts/Asheville-Sans-24-Light.pft", &err);
+    if (!font_title) font_title = font_big;
     if (font_body) pd->graphics->setFont(font_body);
 }
 

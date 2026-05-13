@@ -16,13 +16,13 @@ static void test_history_push_and_get(void) {
 
     Board b;
     board_init(&b);
-    history_push(&h, &b);          /* turn 0 */
+    history_push(&h, &b, NULL);          /* turn 0 */
     b.turn_count = 1;
     b.black_score = 5;
-    history_push(&h, &b);          /* turn 1 */
+    history_push(&h, &b, NULL);          /* turn 1 */
     b.turn_count = 2;
     b.black_score = 12;
-    history_push(&h, &b);          /* turn 2 */
+    history_push(&h, &b, NULL);          /* turn 2 */
 
     ASSERT_EQ(h.count, 3);
     ASSERT_EQ(history_oldest_turn(&h), 0);
@@ -50,7 +50,7 @@ static void test_history_overflow_drops_oldest(void) {
     for (int i = 0; i < HISTORY_CAP + 10; i++) {
         b.turn_count  = i;
         b.black_score = i * 2;
-        history_push(&h, &b);
+        history_push(&h, &b, NULL);
     }
 
     ASSERT_EQ(h.count, HISTORY_CAP + 10);
@@ -80,12 +80,12 @@ static void test_history_replay_after_move(void) {
     board_init(&b);
     board_place_piece(&b, PIECE_TANK,     PLAYER_BLACK, 5, 5);
     board_place_piece(&b, PIECE_INFANTRY, PLAYER_WHITE, 6, 5);
-    history_push(&h, &b);
+    history_push(&h, &b, NULL);
 
     Move m;
     ASSERT_TRUE(find_move(&b, 5, 5, 6, 5, 0, &m));
     apply_move(&b, &m);
-    history_push(&h, &b);
+    history_push(&h, &b, NULL);
 
     /* Snapshot 0 should still show the original setup. */
     const Board* s0 = history_get(&h, 0);

@@ -7,12 +7,18 @@ void history_init(History* h) {
     h->head  = 0;
 }
 
-void history_push(History* h, const Board* b) {
+void history_push(History* h, const Board* b, const Move* m) {
+    Move m_local;
+    if (m) m_local = *m;
+    else   memset(&m_local, 0, sizeof(Move));
+
     if (h->count < HISTORY_CAP) {
         h->snapshots[h->count] = *b;
+        h->moves[h->count]     = m_local;
         h->count++;
     } else {
         h->snapshots[h->head] = *b;
+        h->moves[h->head]     = m_local;
         h->head = (h->head + 1) % HISTORY_CAP;
         h->count++;
     }
@@ -35,19 +41,24 @@ int history_newest_turn(const History* h) {
     return h->snapshots[newest_index].turn_count;
 }
 
-const Board* history_get(const History* h, int turn) {
-    if (h->count == 0) return NULL;
+static int history_index_for_turn(const History* h, int turn) {
+    if (h->count == 0) return -1;
     int oldest = history_oldest_turn(h);
     int newest = history_newest_turn(h);
-    if (turn < oldest || turn > newest) return NULL;
+    if (turn < oldest || turn > newest) return -1;
+    int offset = turn - oldest;
+    if (h->count <= HISTORY_CAP) return offset;
+    return (h->head + offset) % HISTORY_CAP;
+}
 
-    /* Snapshots are stored in turn order starting from h->head. */
-    int offset_from_oldest = turn - oldest;
-    int idx;
-    if (h->count <= HISTORY_CAP) {
-        idx = offset_from_oldest;
-    } else {
-        idx = (h->head + offset_from_oldest) % HISTORY_CAP;
-    }
+const Board* history_get(const History* h, int turn) {
+    int idx = history_index_for_turn(h, turn);
+    if (idx < 0) return NULL;
     return &h->snapshots[idx];
+}
+
+const Move* history_get_move(const History* h, int turn) {
+    int idx = history_index_for_turn(h, turn);
+    if (idx < 0) return NULL;
+    return &h->moves[idx];
 }

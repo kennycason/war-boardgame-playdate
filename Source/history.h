@@ -4,22 +4,28 @@
 #include <stdbool.h>
 #include "types.h"
 #include "board.h"
+#include "move.h"
 
-/* Ring buffer of recent board snapshots. Index 0 is the initial state;
- * index `count - 1` is the most recent. If count > HISTORY_CAP, older
- * entries are silently dropped — review can only go back HISTORY_CAP turns. */
+/* Ring buffer of recent board snapshots + the move that produced each.
+ * Index 0 is the initial state (its move slot is unused). If count exceeds
+ * HISTORY_CAP, older entries are dropped — review can only go back
+ * HISTORY_CAP turns. */
 typedef struct {
     Board snapshots[HISTORY_CAP];
-    int   count;       /* total snapshots pushed (may exceed HISTORY_CAP) */
-    int   head;        /* index in `snapshots[]` of the oldest retained snapshot */
+    Move  moves[HISTORY_CAP];     /* move that led TO snapshots[i] (undef when i corresponds to turn 0) */
+    int   count;                  /* total entries pushed (may exceed HISTORY_CAP) */
+    int   head;                   /* ring-buffer head index */
 } History;
 
 void           history_init(History* h);
-void           history_push(History* h, const Board* b);
+
+/* If `m` is NULL, an empty move record is stored (used for the initial state). */
+void           history_push(History* h, const Board* b, const Move* m);
 
 /* `turn` is in the same range as Board.turn_count. Returns NULL if outside
  * the retained window. */
 const Board*   history_get(const History* h, int turn);
+const Move*    history_get_move(const History* h, int turn);
 
 /* Oldest and newest retained turn indices. */
 int            history_oldest_turn(const History* h);

@@ -58,7 +58,7 @@ static void after_move_applied(GameState* g, const Move* applied) {
     g->last_move     = *applied;
     g->has_last_move = true;
     g->flash_counter = 12;
-    history_push(&g->history, &g->board);
+    history_push(&g->history, &g->board, applied);
 
     if (g->board.win_state != WIN_NONE) {
         g->mode = GAME_MODE_GAME_OVER;
@@ -100,7 +100,7 @@ void game_reset(GameState* g) {
     g->b_held             = false;
     memset(&g->last_move, 0, sizeof(Move));
     history_init(&g->history);
-    history_push(&g->history, &g->board);
+    history_push(&g->history, &g->board, NULL); /* initial state, no move */
 
     /* If AI plays first (rare), kick it off. */
     if (current_player_is_ai(g)) {

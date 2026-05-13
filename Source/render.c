@@ -106,11 +106,12 @@ static void draw_tile_top(int sx, int top_y, TileHighlight h) {
     draw_highlight(sx, top_y, h);
 }
 
-/* South-face wall: terraced band that fills the vertical gap between the
- * elevated tile body and the natural ground row. One horizontal stripe per
- * elevation level so the user can literally count tiers. The wall's left and
- * right edges are drawn at columns shared with the next neighbor so vertical
- * lines don't double up. */
+/* South-face wall: terraced + shaded band that fills the vertical gap
+ * between the elevated tile body and the natural ground row.
+ *  - Vertical hatch (alternating columns) gives a "shaded cliff face" look.
+ *  - Horizontal stripe per elevation level on top of the hatch so tiers stay
+ *    countable.
+ *  - Left/right edges extend to wall_bottom so neighbors share that pixel. */
 static void draw_south_wall(int sx, int sy_base, int elev) {
     if (elev <= 0) return;
     int elev_dy     = elev * 2;
@@ -120,14 +121,18 @@ static void draw_south_wall(int sx, int sy_base, int elev) {
     /* Wipe to white so no piece/wall behind bleeds through. */
     pd->graphics->fillRect(sx, wall_top, TILE_SIZE, elev_dy, kColorWhite);
 
-    /* Horizontal tier line per level. Each level is 2px tall; line marks the
-     * bottom of each tier. */
+    /* Vertical hatch (1-px stripes every 2 cols) — the shaded cliff. */
+    for (int dxp = 2; dxp < TILE_SIZE - 1; dxp += 2) {
+        pd->graphics->fillRect(sx + dxp, wall_top, 1, elev_dy, kColorBlack);
+    }
+
+    /* Horizontal tier line per level, drawn on top so it cuts cleanly through
+     * the hatch. */
     for (int t = 0; t < elev; t++) {
         int y = wall_top + t * 2 + 1;
         pd->graphics->drawLine(sx, y, sx + TILE_SIZE, y, 1, kColorBlack);
     }
-    /* Left + right wall edges — extend to wall_bottom so they share that pixel
-     * with the next row's top border. */
+    /* Left + right wall edges. */
     pd->graphics->drawLine(sx,             wall_top, sx,             wall_bottom, 1, kColorBlack);
     pd->graphics->drawLine(sx + TILE_SIZE, wall_top, sx + TILE_SIZE, wall_bottom, 1, kColorBlack);
 }
@@ -229,24 +234,61 @@ static void draw_excavator(int sx, int sy, Player pl) {
     rect_p(sx + 13, sy + 1, 3, 3, pl);
 }
 
-static void draw_piece(int sx, int sy, const Piece* p) {
-    int psx = sx + 2;
-    int psy = sy + 2;
-    switch (p->type) {
-    case PIECE_INFANTRY:    draw_infantry(psx, psy, p->player); break;
-    case PIECE_TANK:        draw_tank(psx, psy, p->player); break;
-    case PIECE_SNIPER:      draw_sniper(psx, psy, p->player); break;
-    case PIECE_ARTILLERY:
-        draw_artillery(psx, psy, p->player);
-        if (p->reloading) draw_artillery_reloading(sx, sy);
-        break;
-    case PIECE_MISSILE:     draw_missile(psx, psy, p->player); break;
-    case PIECE_AIR_DEFENSE: draw_air_defense(psx, psy, p->player); break;
-    case PIECE_BOMBER:      draw_bomber(psx, psy, p->player); break;
-    case PIECE_COMMANDER:   draw_commander(psx, psy, p->player); break;
-    case PIECE_EXCAVATOR:   draw_excavator(psx, psy, p->player); break;
+/* Draws just the 16x16 piece sprite anchored at (sx, sy). No reload marker. */
+static void draw_piece_sprite(int sx, int sy, PieceType t, Player pl) {
+    switch (t) {
+    case PIECE_INFANTRY:    draw_infantry(sx, sy, pl); break;
+    case PIECE_TANK:        draw_tank(sx, sy, pl); break;
+    case PIECE_SNIPER:      draw_sniper(sx, sy, pl); break;
+    case PIECE_ARTILLERY:   draw_artillery(sx, sy, pl); break;
+    case PIECE_MISSILE:     draw_missile(sx, sy, pl); break;
+    case PIECE_AIR_DEFENSE: draw_air_defense(sx, sy, pl); break;
+    case PIECE_BOMBER:      draw_bomber(sx, sy, pl); break;
+    case PIECE_COMMANDER:   draw_commander(sx, sy, pl); break;
+    case PIECE_EXCAVATOR:   draw_excavator(sx, sy, pl); break;
     default: break;
     }
+}
+
+/* Draws a piece centered in a 20x20 tile at (sx, sy). */
+static void draw_piece(int sx, int sy, const Piece* p) {
+    draw_piece_sprite(sx + 2, sy + 2, p->type, p->player);
+    if (p->type == PIECE_ARTILLERY && p->reloading) {
+        draw_artillery_reloading(sx, sy);
+    }
+}
+
+/* "Cancel" overlay (🚫-style circle + diagonal slash) over a 16x16 sprite,
+ * drawn with XOR so it stays visible over both filled and outlined pieces. */
+static void draw_no_symbol(int sx, int sy) {
+    LCDColor c = (LCDColor)kColorXOR;
+    pd->graphics->drawEllipse(sx,     sy,     16, 16, 2, 0, 0, c);
+    pd->graphics->drawLine(sx + 3, sy + 3, sx + 12, sy + 12, 2, c);
+}
+
+/* Elevation icon: small filled triangle on the left, plus N stacked
+ * horizontal "tier" lines on the right (one per elevation level). */
+static void draw_elev_icon(int x, int y, int elev) {
+    /* triangle, 6w x 6h, anchored bottom-left of icon area (y+11 bottom) */
+    int tri_bottom = y + 11;
+    pd->graphics->fillTriangle(x,     tri_bottom,
+                                x + 3, tri_bottom - 6,
+                                x + 6, tri_bottom, kColorBlack);
+    /* stacked horizontal lines, count = elev */
+    int lines_x0 = x + 9;
+    int lines_x1 = x + 16;
+    for (int t = 0; t < elev; t++) {
+        int yt = tri_bottom - t * 2;
+        pd->graphics->drawLine(lines_x0, yt, lines_x1, yt, 1, kColorBlack);
+    }
+}
+
+/* Thick black frame to highlight which player's turn it is. */
+static void draw_thick_frame(int sx, int sy, int w, int h) {
+    pd->graphics->fillRect(sx,         sy,         w, 2, kColorBlack);
+    pd->graphics->fillRect(sx,         sy + h - 2, w, 2, kColorBlack);
+    pd->graphics->fillRect(sx,         sy,         2, h, kColorBlack);
+    pd->graphics->fillRect(sx + w - 2, sy,         2, h, kColorBlack);
 }
 
 /* ---------------- Cursor ---------------- */
@@ -311,11 +353,6 @@ static void draw_board(const Board* b, RenderMode rm, bool draw_cursor_flag,
 
 /* ---------------- Sidebar ---------------- */
 
-static void draw_player_badge(int x, int y, Player pl) {
-    if (pl == PLAYER_BLACK) pd->graphics->fillRect(x, y, 12, 12, kColorBlack);
-    else                    pd->graphics->drawRect(x, y, 12, 12, kColorBlack);
-}
-
 static const char* difficulty_str(AIDifficulty d) {
     switch (d) {
     case AI_EASY:   return "EASY";
@@ -324,49 +361,138 @@ static const char* difficulty_str(AIDifficulty d) {
     }
 }
 
+/* Top status: one 20x20 mini-tile per player with an infantry sprite (the
+ * silhouette doubles as the team marker) and a score next to it. A thick
+ * frame around a tile indicates whose turn it is. */
+static int draw_player_status(int x, int y, const GameState* g) {
+    char buf[16];
+    int slot_w  = 64;
+    int blk_x   = x;
+    int wht_x   = x + slot_w + 8;
+    int tile_sz = 20;
+
+    bool blk_turn = (g->board.current_player == PLAYER_BLACK
+                     && g->mode != GAME_MODE_GAME_OVER
+                     && g->mode != GAME_MODE_TITLE);
+    bool wht_turn = (g->board.current_player == PLAYER_WHITE
+                     && g->mode != GAME_MODE_GAME_OVER
+                     && g->mode != GAME_MODE_TITLE);
+
+    /* Black tile + score */
+    pd->graphics->drawRect(blk_x, y, tile_sz + 1, tile_sz + 1, kColorBlack);
+    draw_piece_sprite(blk_x + 2, y + 2, PIECE_INFANTRY, PLAYER_BLACK);
+    if (blk_turn) draw_thick_frame(blk_x, y, tile_sz + 1, tile_sz + 1);
+    snprintf(buf, sizeof(buf), "%d", g->board.black_score);
+    pd->graphics->setFont(font_big);
+    draw_text(buf, blk_x + tile_sz + 6, y + 1);
+    pd->graphics->setFont(font_body);
+
+    /* White tile + score */
+    pd->graphics->drawRect(wht_x, y, tile_sz + 1, tile_sz + 1, kColorBlack);
+    draw_piece_sprite(wht_x + 2, y + 2, PIECE_INFANTRY, PLAYER_WHITE);
+    if (wht_turn) draw_thick_frame(wht_x, y, tile_sz + 1, tile_sz + 1);
+    snprintf(buf, sizeof(buf), "%d", g->board.white_score);
+    pd->graphics->setFont(font_big);
+    draw_text(buf, wht_x + tile_sz + 6, y + 1);
+    pd->graphics->setFont(font_body);
+
+    return y + tile_sz + 4;
+}
+
+/* Cursor info row: @ x,y  ▲≡ N    plus hovered piece name underneath. */
+static int draw_cursor_info(int x, int y, const GameState* g) {
+    char buf[32];
+    int cx = g->cursor_x;
+    int cy = g->cursor_y;
+    snprintf(buf, sizeof(buf), "@ %d,%d", cx, cy);
+    draw_text(buf, x, y);
+
+    int elev = g->board.tiles[cx][cy].elevation;
+    draw_elev_icon(x + 60, y + 3, elev);
+    snprintf(buf, sizeof(buf), "%d", elev);
+    draw_text(buf, x + 82, y);
+
+    /* Hovered piece — always shown when one is under the cursor. */
+    const Piece* p = &g->board.tiles[cx][cy].piece;
+    if (p->type != PIECE_NONE) {
+        draw_text(piece_name(p->type), x, y + 16);
+        if (p->type == PIECE_ARTILLERY && p->reloading) {
+            draw_text("RELOAD", x + 90, y + 16);
+        }
+    } else {
+        draw_text("--", x, y + 16);
+    }
+
+    return y + 36;
+}
+
+/* One history row: small piece sprite + positions + (if attack) destroyed
+ * sprite with a no-symbol overlay. Returns the height used. */
+static int draw_history_row(int x, int y, const Move* m) {
+    /* attacker sprite (always shown) */
+    draw_piece_sprite(x, y, m->piece_type, m->player);
+
+    /* positions text */
+    char buf[24];
+    snprintf(buf, sizeof(buf), "%d,%d>%d,%d", m->from_x, m->from_y, m->to_x, m->to_y);
+    draw_text(buf, x + 18, y - 1);
+
+    /* if an attack actually destroyed something, append destroyed + no-symbol */
+    if (m->move_type == MOVE_TYPE_ATTACK && m->destroyed_type != PIECE_NONE && !m->intercepted) {
+        int dx = x + 80;
+        draw_piece_sprite(dx, y, m->destroyed_type, m->destroyed_player);
+        draw_no_symbol(dx, y);
+    } else if (m->intercepted) {
+        /* attacker was intercepted — show its own sprite "cancelled" */
+        int dx = x + 80;
+        draw_piece_sprite(dx, y, m->piece_type, m->player);
+        draw_no_symbol(dx, y);
+    }
+    return 18;
+}
+
+/* History panel: most-recent N moves at the top, scrolling backward. */
+static void draw_history_panel(int x, int y, int max_h, const GameState* g) {
+    int line_h     = 18;
+    int max_lines  = max_h / line_h;
+    if (max_lines < 1) return;
+
+    int newest = history_newest_turn(&g->history);
+    int oldest = history_oldest_turn(&g->history);
+    int drawn  = 0;
+
+    for (int turn = newest; turn > oldest && drawn < max_lines; turn--) {
+        const Move* m = history_get_move(&g->history, turn);
+        if (!m) continue;
+        if (m->piece_type == PIECE_NONE) continue; /* initial-state placeholder */
+        draw_history_row(x, y + drawn * line_h, m);
+        drawn++;
+    }
+}
+
 static void draw_sidebar(GameState* g) {
     int x = SIDEBAR_X;
     int y = 4;
-    char buf[64];
 
-    pd->graphics->setFont(font_big);
-    draw_text("WAR", x, y);
-    y += 22;
+    /* Top status */
+    y = draw_player_status(x, y, g);
     pd->graphics->drawLine(x, y, x + SIDEBAR_W, y, 1, kColorBlack);
     y += 4;
 
-    pd->graphics->setFont(font_body);
-
+    /* Status-conditional middle band */
     if (g->mode == GAME_MODE_AI_THINKING) {
         draw_hourglass(x, y);
         draw_text("THINKING", x + 18, y);
-        y += 17;
+        y += 24;
     } else if (g->mode == GAME_MODE_GAME_OVER) {
         if (g->board.win_state == WIN_BLACK)      draw_text("BLACK WINS!", x, y);
         else if (g->board.win_state == WIN_WHITE) draw_text("WHITE WINS!", x, y);
         else                                      draw_text("DRAW",        x, y);
         y += 17;
-        draw_text("A/B: title", x, y);
+        draw_text("A : title", x, y);
         y += 17;
-    } else {
-        draw_player_badge(x, y, g->board.current_player);
-        draw_text(g->board.current_player == PLAYER_BLACK ? "BLACK" : "WHITE",
-                  x + 16, y - 1);
-        draw_text("TURN", x + 16 + 44, y - 1);
-        y += 17;
-    }
-
-    snprintf(buf, sizeof(buf), "BLK %3d", g->board.black_score);
-    draw_text(buf, x, y);
-    snprintf(buf, sizeof(buf), "WHT %3d", g->board.white_score);
-    draw_text(buf, x + 70, y);
-    y += 18;
-
-    pd->graphics->drawLine(x, y, x + SIDEBAR_W, y, 1, kColorBlack);
-    y += 3;
-
-    /* Cursor coords / review banner */
-    if (g->review_offset < 0) {
+    } else if (g->review_offset < 0) {
+        char buf[32];
         int target_turn = g->board.turn_count + g->review_offset;
         snprintf(buf, sizeof(buf), "PAST t%d", target_turn);
         draw_text(buf, x, y);
@@ -374,62 +500,31 @@ static void draw_sidebar(GameState* g) {
         draw_text("hold B+crank", x, y);
         y += 17;
     } else {
-        snprintf(buf, sizeof(buf), "@ %d,%d", g->cursor_x, g->cursor_y);
-        draw_text(buf, x, y);
-        y += 17;
-
-        if (g->mode == GAME_MODE_PIECE_SELECTED) {
-            const Piece* sp = &g->board.tiles[g->selected_x][g->selected_y].piece;
-            snprintf(buf, sizeof(buf), "%s", piece_name(sp->type));
-            draw_text(buf, x, y);
-            y += 17;
-            if (sp->type == PIECE_ARTILLERY && sp->reloading) {
-                draw_text("[RELOAD]", x, y);
-                y += 17;
-            }
-        } else {
-            draw_text("- - -", x, y);
-            y += 17;
-        }
+        y = draw_cursor_info(x, y, g);
     }
-
     pd->graphics->drawLine(x, y, x + SIDEBAR_W, y, 1, kColorBlack);
-    y += 3;
+    y += 4;
 
-    draw_text("LAST", x, y);
-    y += 16;
-    if (g->has_last_move) {
-        const Move* m = &g->last_move;
-        char tag = (m->move_type == MOVE_TYPE_ATTACK) ? '*' : ' ';
-        snprintf(buf, sizeof(buf), "%c%s %s",
-                 tag,
-                 m->player == PLAYER_BLACK ? "B" : "W",
-                 piece_short_name(m->piece_type));
-        draw_text(buf, x, y);
-        y += 16;
-        snprintf(buf, sizeof(buf), "%d,%d>%d,%d",
-                 m->from_x, m->from_y, m->to_x, m->to_y);
-        draw_text(buf, x, y);
-        y += 16;
-        if (m->intercepted) {
-            draw_text("INTERCEPT!", x, y);
-            y += 16;
-        }
-    }
+    /* Remaining vertical space → history rows */
+    int remaining = (LCD_ROWS - 4) - y;
+    if (remaining > 0) draw_history_panel(x, y, remaining, g);
 }
 
 /* ---------------- Title menu ---------------- */
 
 static void draw_menu_row(const char* label, const char* value, int x, int y,
                           bool selected, bool has_arrows) {
-    if (selected) {
-        draw_text(">", x, y);
-    }
+    if (selected) draw_text(">", x, y);
     draw_text(label, x + 16, y);
     if (value) {
-        if (has_arrows && selected) draw_text("<", x + 130, y);
-        draw_text(value, x + 144, y);
-        if (has_arrows && selected) draw_text(">", x + 200, y);
+        int val_x = x + 140;
+        int val_w = pd->graphics->getTextWidth(font_body, value, strlen(value), kASCIIEncoding, 0);
+        if (has_arrows && selected) {
+            int lt_w = pd->graphics->getTextWidth(font_body, "<", 1, kASCIIEncoding, 0);
+            draw_text("<", val_x - lt_w - 6, y);
+        }
+        draw_text(value, val_x, y);
+        if (has_arrows && selected) draw_text(">", val_x + val_w + 4, y);
     }
 }
 

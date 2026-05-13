@@ -53,7 +53,8 @@ static void test_history_overflow_drops_oldest(void) {
         history_push(&h, &b, NULL);
     }
 
-    ASSERT_EQ(h.count, HISTORY_CAP + 10);
+    /* `count` is now retained-entries (capped at HISTORY_CAP). */
+    ASSERT_EQ(h.count, HISTORY_CAP);
     ASSERT_EQ(history_newest_turn(&h), HISTORY_CAP + 9);
     ASSERT_EQ(history_oldest_turn(&h), 10);
 
@@ -100,10 +101,42 @@ static void test_history_replay_after_move(void) {
     ASSERT_EQ(s1->tiles[6][5].piece.type, PIECE_TANK);
 }
 
+static void test_history_truncate_at(void) {
+    History h;
+    history_init(&h);
+    Board b;
+    board_init(&b);
+    for (int i = 0; i <= 8; i++) {
+        b.turn_count = i;
+        b.black_score = i * 3;
+        history_push(&h, &b, NULL);
+    }
+    ASSERT_EQ(history_newest_turn(&h), 8);
+    ASSERT_EQ(h.count, 9);
+
+    history_truncate_at(&h, 5);
+    ASSERT_EQ(history_newest_turn(&h), 5);
+    ASSERT_EQ(h.count, 6);
+    ASSERT_TRUE(history_get(&h, 5) != NULL);
+    ASSERT_TRUE(history_get(&h, 6) == NULL);
+    ASSERT_TRUE(history_get(&h, 0) != NULL);
+    ASSERT_EQ(history_get(&h, 0)->black_score, 0);
+    ASSERT_EQ(history_get(&h, 5)->black_score, 15);
+
+    /* truncate at newest is a no-op */
+    history_truncate_at(&h, 5);
+    ASSERT_EQ(h.count, 6);
+
+    /* truncate before oldest clears everything */
+    history_truncate_at(&h, -1);
+    ASSERT_EQ(h.count, 0);
+}
+
 void run_history_tests(void) {
     SECTION("History");
     RUN(test_history_empty);
     RUN(test_history_push_and_get);
     RUN(test_history_overflow_drops_oldest);
     RUN(test_history_replay_after_move);
+    RUN(test_history_truncate_at);
 }

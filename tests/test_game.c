@@ -134,6 +134,131 @@ static void test_highlights_are_set_for_valid_moves(void) {
     ASSERT_EQ(g.board.tiles[6][2].highlight, HIGHLIGHT_MOVE);
 }
 
+/* Helper: make one full black-then-white turn pair on an open setup. */
+static void play_two_moves(GameState* g) {
+    /* Black infantry (5,2) → (6,2) */
+    g->cursor_x = 5; g->cursor_y = 2;
+    game_action_a(g);
+    g->cursor_x = 6; g->cursor_y = 2;
+    game_action_a(g);
+
+    /* White infantry (5,8) → (4,8) */
+    g->cursor_x = 5; g->cursor_y = 8;
+    game_action_a(g);
+    g->cursor_x = 4; g->cursor_y = 8;
+    game_action_a(g);
+}
+
+static void test_commit_review_branch_truncates_future(void) {
+    GameState g;
+    game_init(&g);
+    g.settings.match = MATCH_PVP;
+    game_reset(&g);
+    play_two_moves(&g);
+    ASSERT_EQ(g.board.turn_count, 2);
+    ASSERT_EQ(history_newest_turn(&g.history), 2);
+
+    /* Scrub back 1 turn and commit. */
+    g.review_offset = -1;
+    game_commit_review_branch(&g);
+
+    ASSERT_EQ(g.review_offset, 0);
+    ASSERT_EQ(g.board.turn_count, 1);
+    ASSERT_EQ(history_newest_turn(&g.history), 1);
+    ASSERT_TRUE(history_get(&g.history, 2) == NULL);
+    /* Turn 1 happened after black moved, so it's white's turn now. */
+    ASSERT_EQ(g.board.current_player, PLAYER_WHITE);
+    /* The piece that white moved should still be at its original spot. */
+    ASSERT_EQ(g.board.tiles[5][8].piece.type, PIECE_INFANTRY);
+    ASSERT_EQ(g.board.tiles[5][8].piece.player, PLAYER_WHITE);
+}
+
+static void test_commit_review_branch_noop_at_zero(void) {
+    GameState g;
+    game_init(&g);
+    g.settings.match = MATCH_PVP;
+    game_reset(&g);
+    play_two_moves(&g);
+    int turn_before = g.board.turn_count;
+    int hist_before = history_newest_turn(&g.history);
+
+    game_commit_review_branch(&g);
+
+    ASSERT_EQ(g.board.turn_count, turn_before);
+    ASSERT_EQ(history_newest_turn(&g.history), hist_before);
+}
+
+static void test_ai_step_eventually_finishes(void) {
+    GameState g;
+    game_init(&g);
+    g.settings.match     = MATCH_PVA;
+    g.settings.ai_player = PLAYER_WHITE;
+    g.settings.ai_level  = 5; /* depth 2 */
+    game_reset(&g);
+
+    /* Black moves so it becomes white (AI)'s turn. */
+    g.cursor_x = 5; g.cursor_y = 2;
+    game_action_a(&g);
+    g.cursor_x = 6; g.cursor_y = 2;
+    game_action_a(&g);
+
+    ASSERT_EQ(g.mode, GAME_MODE_AI_THINKING);
+    ASSERT_TRUE(g.ai_pending);
+
+    /* Step until done. Should converge in <= target_depth + 1 calls. */
+    int max_steps = 20;
+    int steps = 0;
+    while (!game_ai_step(&g) && steps < max_steps) steps++;
+    ASSERT_TRUE(steps < max_steps);
+    ASSERT_FALSE(g.ai_pending);
+    ASSERT_EQ(g.board.current_player, PLAYER_BLACK);
+    ASSERT_TRUE(g.mode == GAME_MODE_FREE || g.mode == GAME_MODE_GAME_OVER);
+}
+
+static void test_ai_step_walks_depths_in_order(void) {
+    GameState g;
+    game_init(&g);
+    g.settings.match     = MATCH_PVA;
+    g.settings.ai_player = PLAYER_WHITE;
+    g.settings.ai_level  = 6; /* depth 2, no noise */
+    game_reset(&g);
+
+    g.cursor_x = 5; g.cursor_y = 2;
+    game_action_a(&g);
+    g.cursor_x = 6; g.cursor_y = 2;
+    game_action_a(&g);
+
+    /* First step initializes and runs depth 1. */
+    bool done1 = game_ai_step(&g);
+    ASSERT_FALSE(done1);
+    ASSERT_EQ(g.ai_target_depth, 2);
+    ASSERT_EQ(g.ai_next_depth, 2);
+    ASSERT_TRUE(g.ai_has_best);
+
+    /* Second step runs depth 2 and commits. */
+    bool done2 = game_ai_step(&g);
+    ASSERT_TRUE(done2);
+    ASSERT_FALSE(g.ai_pending);
+}
+
+static void test_ai_step_level_1_finishes_in_one_call(void) {
+    GameState g;
+    game_init(&g);
+    g.settings.match     = MATCH_PVA;
+    g.settings.ai_player = PLAYER_WHITE;
+    g.settings.ai_level  = 3; /* depth 1 */
+    game_reset(&g);
+
+    g.cursor_x = 5; g.cursor_y = 2;
+    game_action_a(&g);
+    g.cursor_x = 6; g.cursor_y = 2;
+    game_action_a(&g);
+
+    bool done = game_ai_step(&g);
+    ASSERT_TRUE(done);
+    ASSERT_FALSE(g.ai_pending);
+}
+
 void run_game_tests(void) {
     SECTION("Game state");
     RUN(test_game_init_default_state);
@@ -146,4 +271,9 @@ void run_game_tests(void) {
     RUN(test_a_on_valid_destination_executes);
     RUN(test_a_on_invalid_destination_does_nothing);
     RUN(test_highlights_are_set_for_valid_moves);
+    RUN(test_commit_review_branch_truncates_future);
+    RUN(test_commit_review_branch_noop_at_zero);
+    RUN(test_ai_step_eventually_finishes);
+    RUN(test_ai_step_walks_depths_in_order);
+    RUN(test_ai_step_level_1_finishes_in_one_call);
 }

@@ -50,31 +50,8 @@ typedef enum {
 typedef enum {
     GAME_MODE_FREE,           /* cursor floats, no piece selected */
     GAME_MODE_PIECE_SELECTED, /* a piece is selected, cursor picks destination */
-    GAME_MODE_AI_THINKING,    /* AI is computing its move */
     GAME_MODE_GAME_OVER,
     GAME_MODE_TITLE,
 } GameMode;
-
-typedef enum {
-    MATCH_PVP = 0,
-    MATCH_PVA = 1,
-} MatchType;
-
-#define AI_LEVEL_MIN 1
-#define AI_LEVEL_MAX 9
-
-typedef enum {
-    RENDER_FLAT     = 0,
-    RENDER_ELEVATED = 1,
-} RenderMode;
-
-typedef struct {
-    MatchType  match;
-    int        ai_level;     /* 1..9 — see ai.c for level → depth/randomness map */
-    Player     ai_player;    /* which color the AI controls in PvA */
-    RenderMode render;
-} Settings;
-
-#define HISTORY_CAP 200
 
 #endif

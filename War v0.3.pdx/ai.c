@@ -5,18 +5,6 @@
 
 #define INF_SCORE 1000000
 
-/* Per-ply scratch buffers — kept out of the stack so the 60 KB Playdate
- * stack doesn't blow up at higher search depths. AI search is
- * single-threaded so static buffers indexed by recursion ply are safe.
- *
- *   move array: 484 * sizeof(Move) ≈ 26 KB per ply
- *   Undo:       sizeof(Board)       ≈  4 KB per ply
- *
- * AI_MAX_PLY needs to be at least the deepest search depth we'll ever do
- * (current target max = 3, so 4 gives one ply of headroom). */
-#define AI_MAX_PLY 5
-#define AI_MAX_MOVES (BOARD_DIM * BOARD_DIM * 4)
-
 static int g_nodes = 0;
 
 int ai_last_node_count(void) { return g_nodes; }
@@ -106,18 +94,13 @@ typedef struct {
     Board snapshot;
 } Undo;
 
-static Move g_moves_at_ply[AI_MAX_PLY][AI_MAX_MOVES];
-static Undo g_undo_at_ply [AI_MAX_PLY];
-
 static void save(Undo* u, const Board* b) { u->snapshot = *b; }
 static void load(const Undo* u, Board* b) { *b = u->snapshot; }
 
 /* ---- Minimax with alpha-beta ---- */
 
-/* Score from the perspective of the side currently to move. `ply` is the
- * recursion depth from the root (0 at root) and indexes the per-ply scratch
- * arrays so we don't put large buffers on the stack. */
-static int negamax(Board* b, int depth, int alpha, int beta, int ply) {
+/* Score from the perspective of the side currently to move. */
+static int negamax(Board* b, int depth, int alpha, int beta) {
     g_nodes++;
 
     if (b->win_state != WIN_NONE) {
@@ -132,20 +115,15 @@ static int negamax(Board* b, int depth, int alpha, int beta, int ply) {
     if (depth == 0) {
         return ai_evaluate(b, b->current_player);
     }
-    if (ply >= AI_MAX_PLY) {
-        /* Safety: should never happen given AI_MAX_PLY > target depth. */
-        return ai_evaluate(b, b->current_player);
-    }
 
-    Move* moves = g_moves_at_ply[ply];
-    Undo* u     = &g_undo_at_ply[ply];
+    Move moves[BOARD_DIM * BOARD_DIM * 4];
     int n = 0;
-    for (int x = 0; x < BOARD_DIM && n < AI_MAX_MOVES; x++) {
-        for (int y = 0; y < BOARD_DIM && n < AI_MAX_MOVES; y++) {
+    for (int x = 0; x < BOARD_DIM && n < (int)(sizeof(moves)/sizeof(moves[0])); x++) {
+        for (int y = 0; y < BOARD_DIM && n < (int)(sizeof(moves)/sizeof(moves[0])); y++) {
             const Piece* p = &b->tiles[x][y].piece;
             if (p->type == PIECE_NONE) continue;
             if (p->player != b->current_player) continue;
-            int room = AI_MAX_MOVES - n;
+            int room = (int)(sizeof(moves)/sizeof(moves[0])) - n;
             int got = generate_moves(b, x, y, &moves[n], room);
             n += got;
         }
@@ -155,11 +133,12 @@ static int negamax(Board* b, int depth, int alpha, int beta, int ply) {
     qsort(moves, n, sizeof(Move), cmp_moves_desc);
 
     int best = -INF_SCORE;
+    Undo u;
     for (int i = 0; i < n; i++) {
-        save(u, b);
+        save(&u, b);
         apply_move(b, &moves[i]);
-        int score = -negamax(b, depth - 1, -beta, -alpha, ply + 1);
-        load(u, b);
+        int score = -negamax(b, depth - 1, -beta, -alpha);
+        load(&u, b);
 
         if (score > best) best = score;
         if (best > alpha) alpha = best;
@@ -198,22 +177,19 @@ static int cmp_indices_by_score_desc(const void* a, const void* b) {
     return g_root_scores[ib] - g_root_scores[ia];
 }
 
-static int g_root_idx[AI_MAX_MOVES];
-
 bool ai_pick_move_at_depth(Board* b, int depth, int noise_pct, Move* out) {
     g_nodes = 0;
 
     Player root = b->current_player;
 
-    /* Root uses ply 0's scratch space — recursion uses ply 1+. */
-    Move* moves = g_moves_at_ply[0];
-    Undo* u     = &g_undo_at_ply[0];
+    /* Collect root moves. */
+    Move moves[BOARD_DIM * BOARD_DIM * 4];
     int n = 0;
-    for (int x = 0; x < BOARD_DIM && n < AI_MAX_MOVES; x++) {
-        for (int y = 0; y < BOARD_DIM && n < AI_MAX_MOVES; y++) {
+    for (int x = 0; x < BOARD_DIM && n < (int)(sizeof(moves)/sizeof(moves[0])); x++) {
+        for (int y = 0; y < BOARD_DIM && n < (int)(sizeof(moves)/sizeof(moves[0])); y++) {
             const Piece* p = &b->tiles[x][y].piece;
             if (p->type == PIECE_NONE || p->player != root) continue;
-            int room = AI_MAX_MOVES - n;
+            int room = (int)(sizeof(moves)/sizeof(moves[0])) - n;
             int got = generate_moves(b, x, y, &moves[n], room);
             n += got;
         }
@@ -224,19 +200,20 @@ bool ai_pick_move_at_depth(Board* b, int depth, int noise_pct, Move* out) {
 
     int  alpha = -INF_SCORE;
     int  beta  =  INF_SCORE;
+    Undo u;
 
     /* Score every root move so we can also rank for noise. */
     for (int i = 0; i < n; i++) {
-        save(u, b);
+        save(&u, b);
         apply_move(b, &moves[i]);
-        int score = -negamax(b, depth - 1, -beta, -alpha, 1);
-        load(u, b);
+        int score = -negamax(b, depth - 1, -beta, -alpha);
+        load(&u, b);
         g_root_scores[i] = score;
         if (score > alpha) alpha = score;
     }
 
     /* Sort indices by score descending. */
-    int* idx = g_root_idx;
+    int idx[BOARD_DIM * BOARD_DIM * 4];
     for (int i = 0; i < n; i++) idx[i] = i;
     qsort(idx, n, sizeof(int), cmp_indices_by_score_desc);
 

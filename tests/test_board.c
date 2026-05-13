@@ -1,3 +1,4 @@
+#include <string.h>
 #include "test.h"
 #include "board.h"
 
@@ -64,7 +65,7 @@ static void test_board_setup_specific_pieces(void) {
 static void test_board_terrain_matches_kotlin_default(void) {
     Board b;
     board_init(&b);
-    board_setup_terrain(&b);
+    board_setup_terrain(&b, MAP_DEFAULT);
     /* Spot-check a few known cells from DefaultTerrainV2Generator. */
     ASSERT_EQ(b.tiles[0][0].elevation,  2);
     ASSERT_EQ(b.tiles[0][4].elevation,  3);
@@ -118,6 +119,29 @@ static void test_board_clear_highlights(void) {
     }
 }
 
+static void test_board_terrain_all_maps_in_range(void) {
+    Board b;
+    MapLayout maps[] = { MAP_DEFAULT, MAP_CLASSIC, MAP_VALLEY, MAP_WAVES, MAP_RANDOM };
+    for (size_t i = 0; i < sizeof(maps)/sizeof(maps[0]); i++) {
+        board_init(&b);
+        board_setup_terrain(&b, maps[i]);
+        for (int x = 0; x < BOARD_DIM; x++) {
+            for (int y = 0; y < BOARD_DIM; y++) {
+                int e = b.tiles[x][y].elevation;
+                ASSERT_TRUE(e >= MIN_ELEVATION && e <= MAX_ELEVATION);
+            }
+        }
+    }
+}
+
+static void test_board_map_names(void) {
+    ASSERT_TRUE(strcmp(board_map_name(MAP_DEFAULT), "DEFAULT") == 0);
+    ASSERT_TRUE(strcmp(board_map_name(MAP_CLASSIC), "CLASSIC") == 0);
+    ASSERT_TRUE(strcmp(board_map_name(MAP_VALLEY),  "VALLEY") == 0);
+    ASSERT_TRUE(strcmp(board_map_name(MAP_WAVES),   "WAVES") == 0);
+    ASSERT_TRUE(strcmp(board_map_name(MAP_RANDOM),  "RANDOM") == 0);
+}
+
 void run_board_tests(void) {
     SECTION("Board");
     RUN(test_board_init_zeroes_state);
@@ -128,4 +152,6 @@ void run_board_tests(void) {
     RUN(test_board_check_win_commander_dead);
     RUN(test_board_check_win_no_attack_pieces);
     RUN(test_board_clear_highlights);
+    RUN(test_board_terrain_all_maps_in_range);
+    RUN(test_board_map_names);
 }

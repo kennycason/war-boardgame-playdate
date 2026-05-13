@@ -21,13 +21,11 @@ typedef struct {
 } Board;
 
 void board_init(Board* b);
-void board_reset(Board* b, MapLayout map);
+void board_reset(Board* b);
 void board_clear_highlights(Board* b);
 void board_place_piece(Board* b, PieceType type, Player player, int x, int y);
 void board_setup_pieces(Board* b);
-void board_setup_terrain(Board* b, MapLayout map);
-
-const char* board_map_name(MapLayout map);
+void board_setup_terrain(Board* b);
 
 bool     board_in_bounds(int x, int y);
 WinState board_check_win(const Board* b);

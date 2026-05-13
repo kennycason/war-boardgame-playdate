@@ -12,10 +12,9 @@ static void clear_selection(GameState* g) {
     g->selected_x      = -1;
     g->selected_y      = -1;
     g->num_valid_moves = 0;
+    board_clear_highlights(&g->board);
     if (g->board.win_state != WIN_NONE) g->mode = GAME_MODE_GAME_OVER;
     else if (g->mode == GAME_MODE_PIECE_SELECTED) g->mode = GAME_MODE_FREE;
-    /* Refresh (don't just clear) so the new mode's hover preview kicks in. */
-    game_refresh_highlights(g);
 }
 
 static void select_piece(GameState* g, int x, int y) {
@@ -26,47 +25,16 @@ static void select_piece(GameState* g, int x, int y) {
     game_refresh_highlights(g);
 }
 
-/* Mark all of the piece-at-(sx,sy)'s legal destinations with MOVE/ATTACK
- * highlights. Caller is responsible for clearing/setting SELECTED. */
-static void mark_piece_moves(GameState* g, int sx, int sy) {
-    const Piece* p = &g->board.tiles[sx][sy].piece;
-    if (p->type == PIECE_NONE) return;
-    Move scratch[MAX_MOVES_PER_PIECE];
-    int n = generate_moves(&g->board, sx, sy, scratch, MAX_MOVES_PER_PIECE);
-    for (int i = 0; i < n; i++) {
-        const Move* m = &scratch[i];
+void game_refresh_highlights(GameState* g) {
+    board_clear_highlights(&g->board);
+    if (g->mode != GAME_MODE_PIECE_SELECTED) return;
+    g->board.tiles[g->selected_x][g->selected_y].highlight = HIGHLIGHT_SELECTED;
+    for (int i = 0; i < g->num_valid_moves; i++) {
+        const Move* m = &g->valid_moves[i];
         TileHighlight h = (m->move_type == MOVE_TYPE_ATTACK) ? HIGHLIGHT_ATTACK : HIGHLIGHT_MOVE;
         if (g->board.tiles[m->to_x][m->to_y].highlight != HIGHLIGHT_SELECTED) {
             g->board.tiles[m->to_x][m->to_y].highlight = h;
         }
-    }
-}
-
-void game_refresh_highlights(GameState* g) {
-    board_clear_highlights(&g->board);
-
-    if (g->mode == GAME_MODE_PIECE_SELECTED) {
-        g->board.tiles[g->selected_x][g->selected_y].highlight = HIGHLIGHT_SELECTED;
-        for (int i = 0; i < g->num_valid_moves; i++) {
-            const Move* m = &g->valid_moves[i];
-            TileHighlight h = (m->move_type == MOVE_TYPE_ATTACK) ? HIGHLIGHT_ATTACK : HIGHLIGHT_MOVE;
-            if (g->board.tiles[m->to_x][m->to_y].highlight != HIGHLIGHT_SELECTED) {
-                g->board.tiles[m->to_x][m->to_y].highlight = h;
-            }
-        }
-        return;
-    }
-
-    /* FREE mode hover preview — works for own pieces and enemies alike so
-     * the player can read threats without selecting. The hovered piece's
-     * tile also gets the SELECTED frame so the visual is consistent with
-     * an actively-clicked selection. */
-    if (g->mode == GAME_MODE_FREE) {
-        const Piece* p = &g->board.tiles[g->cursor_x][g->cursor_y].piece;
-        if (p->type != PIECE_NONE) {
-            g->board.tiles[g->cursor_x][g->cursor_y].highlight = HIGHLIGHT_SELECTED;
-        }
-        mark_piece_moves(g, g->cursor_x, g->cursor_y);
     }
 }
 
@@ -118,10 +86,8 @@ void game_init(GameState* g) {
 void game_reset(GameState* g) {
     board_reset(&g->board);
     g->mode               = GAME_MODE_FREE;
-    /* Start on an empty tile so the initial frame has no hover preview —
-     * the player explicitly moves the cursor onto a piece to see its moves. */
-    g->cursor_x           = 5;
-    g->cursor_y           = 4;
+    g->cursor_x           = 3;
+    g->cursor_y           = 2;
     g->selected_x         = -1;
     g->selected_y         = -1;
     g->num_valid_moves    = 0;
@@ -145,7 +111,6 @@ void game_reset(GameState* g) {
         g->mode = GAME_MODE_AI_THINKING;
         g->ai_pending = true;
     }
-    game_refresh_highlights(g);
 }
 
 void game_to_title(GameState* g) {
@@ -162,8 +127,6 @@ void game_move_cursor(GameState* g, int dx, int dy) {
     if (g->mode != GAME_MODE_FREE && g->mode != GAME_MODE_PIECE_SELECTED) return;
     g->cursor_x = clamp(g->cursor_x + dx, 0, BOARD_DIM - 1);
     g->cursor_y = clamp(g->cursor_y + dy, 0, BOARD_DIM - 1);
-    /* Hover preview tracks the cursor in FREE mode. */
-    if (g->mode == GAME_MODE_FREE) game_refresh_highlights(g);
 }
 
 void game_action_a(GameState* g) {

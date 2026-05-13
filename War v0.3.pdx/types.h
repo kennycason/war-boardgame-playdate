@@ -68,21 +68,11 @@ typedef enum {
     RENDER_ELEVATED = 1,
 } RenderMode;
 
-typedef enum {
-    MAP_DEFAULT = 0,  /* DefaultTerrainV2 — asymmetric peaks */
-    MAP_CLASSIC = 1,  /* original DefaultTerrain — central hill block */
-    MAP_VALLEY  = 2,  /* diagonal valley with a high ridge */
-    MAP_WAVES   = 3,  /* procedural sin/cos waves */
-    MAP_RANDOM  = 4,  /* fresh random terrain each new game */
-    MAP_COUNT,
-} MapLayout;
-
 typedef struct {
     MatchType  match;
     int        ai_level;     /* 1..9 — see ai.c for level → depth/randomness map */
     Player     ai_player;    /* which color the AI controls in PvA */
     RenderMode render;
-    MapLayout  map;          /* terrain layout */
 } Settings;
 
 #define HISTORY_CAP 200

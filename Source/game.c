@@ -109,6 +109,7 @@ void game_init(GameState* g) {
     g->settings.ai_level  = 5;
     g->settings.ai_player = PLAYER_WHITE;
     g->settings.render    = RENDER_ELEVATED;
+    g->settings.map       = MAP_DEFAULT;
     g->mode                   = GAME_MODE_TITLE;
     g->menu_row               = 0;
     g->selected_x             = -1;
@@ -116,7 +117,7 @@ void game_init(GameState* g) {
 }
 
 void game_reset(GameState* g) {
-    board_reset(&g->board);
+    board_reset(&g->board, g->settings.map);
     g->mode               = GAME_MODE_FREE;
     /* Start on an empty tile so the initial frame has no hover preview —
      * the player explicitly moves the cursor onto a piece to see its moves. */
@@ -222,9 +223,17 @@ void game_action_b(GameState* g) {
 
 /* ---- Title menu ---- */
 
+/* Title menu rows:
+ *  0 — start PvP
+ *  1 — start PvA
+ *  2 — AI level
+ *  3 — Map
+ *  4 — Render */
+#define TITLE_ROW_COUNT 5
+
 void game_title_nav(GameState* g, int dy) {
     if (g->mode != GAME_MODE_TITLE) return;
-    g->menu_row = (g->menu_row + dy + 4) % 4;
+    g->menu_row = (g->menu_row + dy + TITLE_ROW_COUNT) % TITLE_ROW_COUNT;
 }
 
 void game_title_change(GameState* g, int dx) {
@@ -235,6 +244,9 @@ void game_title_change(GameState* g, int dx) {
         if (v > AI_LEVEL_MAX) v = AI_LEVEL_MIN;
         g->settings.ai_level = v;
     } else if (g->menu_row == 3) {
+        int v = ((int)g->settings.map + dx + (int)MAP_COUNT) % (int)MAP_COUNT;
+        g->settings.map = (MapLayout)v;
+    } else if (g->menu_row == 4) {
         g->settings.render = (g->settings.render == RENDER_FLAT) ? RENDER_ELEVATED : RENDER_FLAT;
     }
     /* nothing for rows 0/1 — those are start buttons */

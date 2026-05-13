@@ -1,5 +1,3 @@
-#include <math.h>
-#include <stdlib.h>
 #include <string.h>
 #include "board.h"
 
@@ -8,9 +6,9 @@ void board_init(Board* b) {
     b->current_player = PLAYER_BLACK;
 }
 
-void board_reset(Board* b, MapLayout map) {
+void board_reset(Board* b) {
     board_init(b);
-    board_setup_terrain(b, map);
+    board_setup_terrain(b);
     board_setup_pieces(b);
 }
 
@@ -36,110 +34,26 @@ void board_clear_highlights(Board* b) {
     }
 }
 
-/* ---- Terrain generators ---- */
-
-/* DefaultTerrainV2 — peaks on one side, low on the other. (Default.) */
-static void terrain_default_v2(Board* b) {
+void board_setup_terrain(Board* b) {
+    /* Default terrain from the Kotlin DefaultTerrainV2Generator, indexed
+     * [x][y]. Intentionally asymmetric — that's how the original plays. */
     static const int elev[BOARD_DIM][BOARD_DIM] = {
-        {2,2,1,0,3,3,0,0,0,0,0},
-        {2,1,1,0,0,0,0,0,0,0,0},
-        {1,1,1,1,0,1,2,1,0,0,0},
-        {0,1,1,1,1,2,2,1,0,0,0},
-        {0,0,1,2,3,3,3,2,0,0,1},
-        {0,0,1,3,3,3,3,3,0,0,2},
-        {0,0,0,2,3,3,3,3,0,0,0},
-        {0,0,0,1,3,3,2,1,0,0,0},
-        {0,0,0,0,0,0,0,0,0,1,2},
-        {0,0,0,0,0,0,0,0,1,1,1},
-        {0,0,0,0,0,3,0,0,1,2,2},
+        {2,2,1,0,3,3,0,0,0,0,0},  /* x=0 */
+        {2,1,1,0,0,0,0,0,0,0,0},  /* x=1 */
+        {1,1,1,1,0,1,2,1,0,0,0},  /* x=2 */
+        {0,1,1,1,1,2,2,1,0,0,0},  /* x=3 */
+        {0,0,1,2,3,3,3,2,0,0,1},  /* x=4 */
+        {0,0,1,3,3,3,3,3,0,0,2},  /* x=5 */
+        {0,0,0,2,3,3,3,3,0,0,0},  /* x=6 */
+        {0,0,0,1,3,3,2,1,0,0,0},  /* x=7 */
+        {0,0,0,0,0,0,0,0,0,1,2},  /* x=8 */
+        {0,0,0,0,0,0,0,0,1,1,1},  /* x=9 */
+        {0,0,0,0,0,3,0,0,1,2,2},  /* x=10 */
     };
-    for (int x = 0; x < BOARD_DIM; x++)
-        for (int y = 0; y < BOARD_DIM; y++)
-            b->tiles[x][y].elevation = elev[x][y];
-}
-
-/* Original DefaultTerrainGenerator — a single hill block roughly centered. */
-static void terrain_classic(Board* b) {
-    static const int elev[BOARD_DIM][BOARD_DIM] = {
-        {0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,1,2,1,0,0,0},
-        {0,0,0,0,0,2,2,1,0,0,0},
-        {0,0,1,2,3,3,3,2,0,0,0},
-        {0,0,1,3,3,3,3,3,0,0,0},
-        {0,0,0,2,3,3,3,3,0,0,0},
-        {0,0,0,1,3,3,2,1,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0},
-    };
-    for (int x = 0; x < BOARD_DIM; x++)
-        for (int y = 0; y < BOARD_DIM; y++)
-            b->tiles[x][y].elevation = elev[x][y];
-}
-
-/* Valley — diagonal high ridge on the right + scattered hills on the left.
- * Transposed from the Kotlin ValleyTerrainGenerator (its terrain is indexed
- * [row][col] with the rows running top-to-bottom; my [x][y] convention has
- * y=0 at the bottom of the board). */
-static void terrain_valley(Board* b) {
-    static const int elev[BOARD_DIM][BOARD_DIM] = {
-        {0,0,1,2,2,1,2,1,1,3,3},   /* x=0  */
-        {0,0,0,1,2,2,3,2,2,3,3},   /* x=1  */
-        {0,0,0,1,2,2,2,3,3,3,3},   /* x=2  */
-        {1,0,0,1,1,0,0,1,1,2,3},   /* x=3  */
-        {1,0,0,1,1,0,0,0,0,0,1},   /* x=4  */
-        {2,0,1,1,1,0,1,0,1,0,0},   /* x=5  */
-        {2,1,1,1,2,1,1,0,2,2,1},   /* x=6  */
-        {2,2,2,2,1,0,1,1,1,2,2},   /* x=7  */
-        {3,3,3,2,2,2,1,2,2,2,2},   /* x=8  */
-        {3,3,3,3,3,3,3,2,3,3,3},   /* x=9  */
-        {3,3,3,3,3,3,3,3,3,3,3},   /* x=10 */
-    };
-    for (int x = 0; x < BOARD_DIM; x++)
-        for (int y = 0; y < BOARD_DIM; y++)
-            b->tiles[x][y].elevation = elev[x][y];
-}
-
-/* Procedural waves — sin/cos blend produces smooth hills + dips. */
-static void terrain_waves(Board* b) {
     for (int x = 0; x < BOARD_DIM; x++) {
         for (int y = 0; y < BOARD_DIM; y++) {
-            double z = sin((double)x - 5.0) + cos((double)y - 5.0);
-            int e = (int)(z + 2.0);
-            if (e < MIN_ELEVATION) e = MIN_ELEVATION;
-            if (e > MAX_ELEVATION) e = MAX_ELEVATION;
-            b->tiles[x][y].elevation = e;
+            b->tiles[x][y].elevation = elev[x][y];
         }
-    }
-}
-
-/* Fully random terrain. Uses the global RNG — caller may seed for repeats. */
-static void terrain_random(Board* b) {
-    for (int x = 0; x < BOARD_DIM; x++)
-        for (int y = 0; y < BOARD_DIM; y++)
-            b->tiles[x][y].elevation = rand() % 4;
-}
-
-void board_setup_terrain(Board* b, MapLayout map) {
-    switch (map) {
-    case MAP_CLASSIC: terrain_classic(b);    break;
-    case MAP_VALLEY:  terrain_valley(b);     break;
-    case MAP_WAVES:   terrain_waves(b);      break;
-    case MAP_RANDOM:  terrain_random(b);     break;
-    case MAP_DEFAULT:
-    default:          terrain_default_v2(b); break;
-    }
-}
-
-const char* board_map_name(MapLayout map) {
-    switch (map) {
-    case MAP_CLASSIC: return "CLASSIC";
-    case MAP_VALLEY:  return "VALLEY";
-    case MAP_WAVES:   return "WAVES";
-    case MAP_RANDOM:  return "RANDOM";
-    case MAP_DEFAULT:
-    default:          return "DEFAULT";
     }
 }
 
@@ -221,6 +135,7 @@ WinState board_check_win(const Board* b) {
 
     int black_attackers = board_count_attack_pieces(b, PLAYER_BLACK);
     int white_attackers = board_count_attack_pieces(b, PLAYER_WHITE);
+    /* If a player has only their commander left, they lose. */
     if (black_attackers == 0 && white_attackers == 0) return WIN_DRAW;
     if (black_attackers == 0) return WIN_WHITE;
     if (white_attackers == 0) return WIN_BLACK;

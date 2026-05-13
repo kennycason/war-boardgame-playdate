@@ -5,6 +5,9 @@ commander or wipe out all their attack pieces to win.
 
 Ported in C from a Kotlin/LibGDX desktop original.
 
+![Title screen](screenshots/screenshot01.png)
+![In-game](screenshots/screenshot02.png)
+
 ### Build & run
 
 ```shell

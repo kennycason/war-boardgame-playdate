@@ -188,6 +188,45 @@ static int gen_excavator(Board* b, Piece* p, Move* out, int max) {
     return idx;
 }
 
+/* Marks empty tiles along (dx,dy) between min_d..max_d with HIGHLIGHT_THREAT,
+ * leaving non-NONE highlights alone so the real MOVE/ATTACK/SELECTED layer
+ * stays on top. Used for ranged pieces whose attack range exceeds their move
+ * range, where an empty tile inside the range is still "in danger". */
+static void mark_threat_ray(Board* b, int x, int y, int dx, int dy,
+                            int min_d, int max_d) {
+    for (int i = min_d; i <= max_d; i++) {
+        int tx = x + dx * i;
+        int ty = y + dy * i;
+        if (!board_in_bounds(tx, ty)) break;
+        if (b->tiles[tx][ty].piece.type != PIECE_NONE) continue;
+        if (b->tiles[tx][ty].highlight == HIGHLIGHT_NONE) {
+            b->tiles[tx][ty].highlight = HIGHLIGHT_THREAT;
+        }
+    }
+}
+
+void mark_threat_zone(Board* b, int x, int y) {
+    if (!board_in_bounds(x, y)) return;
+    const Piece* p = &b->tiles[x][y].piece;
+    if (p->type == PIECE_NONE) return;
+
+    if (p->type == PIECE_ARTILLERY) {
+        if (p->reloading
+            && (b->turn_count - p->last_attack_turn) <= ARTILLERY_RELOAD_TURNS) {
+            return;
+        }
+        mark_threat_ray(b, x, y, -1,  0, 2, 3);
+        mark_threat_ray(b, x, y, +1,  0, 2, 3);
+        mark_threat_ray(b, x, y,  0, -1, 2, 3);
+        mark_threat_ray(b, x, y,  0, +1, 2, 3);
+    } else if (p->type == PIECE_MISSILE) {
+        mark_threat_ray(b, x, y, -1, -1, 2, 5);
+        mark_threat_ray(b, x, y, +1, -1, 2, 5);
+        mark_threat_ray(b, x, y, -1, +1, 2, 5);
+        mark_threat_ray(b, x, y, +1, +1, 2, 5);
+    }
+}
+
 int generate_moves(Board* b, int x, int y, Move* out, int max) {
     if (!board_in_bounds(x, y)) return 0;
     Piece* p = &b->tiles[x][y].piece;

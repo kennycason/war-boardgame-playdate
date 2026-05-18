@@ -24,6 +24,13 @@ typedef struct {
  * Returns number of moves written (≤ max_moves). */
 int  generate_moves(Board* b, int x, int y, Move* out, int max_moves);
 
+/* For ranged pieces (artillery, missile), paint every empty tile within attack
+ * range with HIGHLIGHT_THREAT. The hover preview already marks tiles where a
+ * real ATTACK is possible (target present); this fills in the rest of the
+ * range so empty tiles inside it don't look safe. Does not overwrite any
+ * non-NONE highlight, so MOVE/ATTACK/SELECTED win. */
+void mark_threat_zone(Board* b, int x, int y);
+
 /* Apply a move and switch turn. Updates board state, scores, win state. */
 void apply_move(Board* b, Move* mv);
 

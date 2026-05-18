@@ -54,6 +54,7 @@ void game_refresh_highlights(GameState* g) {
                 g->board.tiles[m->to_x][m->to_y].highlight = h;
             }
         }
+        mark_threat_zone(&g->board, g->selected_x, g->selected_y);
         return;
     }
 
@@ -67,6 +68,7 @@ void game_refresh_highlights(GameState* g) {
             g->board.tiles[g->cursor_x][g->cursor_y].highlight = HIGHLIGHT_SELECTED;
         }
         mark_piece_moves(g, g->cursor_x, g->cursor_y);
+        mark_threat_zone(&g->board, g->cursor_x, g->cursor_y);
     }
 }
 

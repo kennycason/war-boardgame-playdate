@@ -89,6 +89,16 @@ static void draw_highlight(int sx, int top_y, TileHighlight h) {
         pd->graphics->fillRect(sx + 1, sy + 1, TILE_SIZE - 1, TILE_SIZE - 1,
                                (LCDColor)(uintptr_t)s_highlight_dither);
     } break;
+    case HIGHLIGHT_THREAT: {
+        /* ~25% gray dither — half the density of MOVE/ATTACK. Marks empty
+         * tiles inside a ranged attacker's range so they don't look safe. */
+        static const uint8_t s_threat_dither[16] = {
+            0xAA, 0xFF, 0x55, 0xFF, 0xAA, 0xFF, 0x55, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+        };
+        pd->graphics->fillRect(sx + 1, sy + 1, TILE_SIZE - 1, TILE_SIZE - 1,
+                               (LCDColor)(uintptr_t)s_threat_dither);
+    } break;
     default: break;
     }
 }

@@ -35,6 +35,7 @@ typedef enum {
 
 typedef enum {
     HIGHLIGHT_NONE,
+    HIGHLIGHT_THREAT,   /* potential danger zone — empty tile in a ranged piece's attack range */
     HIGHLIGHT_MOVE,
     HIGHLIGHT_ATTACK,
     HIGHLIGHT_SELECTED,

@@ -181,10 +181,13 @@ void game_action_a(GameState* g) {
     if (g->mode == GAME_MODE_AI_THINKING) return;
 
     /* If the player is reviewing the past, this A commits a branch — the
-     * past state becomes live and future history is discarded. The same A
-     * press then proceeds with normal selection against the new state. */
+     * past state becomes live and future history is discarded. If the commit
+     * lands on the AI's turn or a finished game, we stop here so the queued
+     * AI step / game-over screen actually plays out; otherwise we fall through
+     * and let the same A press also pick the piece under the cursor. */
     if (g->review_offset != 0) {
         game_commit_review_branch(g);
+        if (g->mode != GAME_MODE_FREE) return;
     }
 
     Tile* under = &g->board.tiles[g->cursor_x][g->cursor_y];
@@ -271,16 +274,26 @@ void game_commit_review_branch(GameState* g) {
     } else {
         g->has_last_move = false;
     }
-    g->mode = (g->board.win_state != WIN_NONE) ? GAME_MODE_GAME_OVER : GAME_MODE_FREE;
-    board_clear_highlights(&g->board);
     g->selected_x       = -1;
     g->selected_y       = -1;
     g->num_valid_moves  = 0;
-    /* If after branching it's now the AI's turn, queue the hourglass for it. */
-    if (g->board.win_state == WIN_NONE && current_player_is_ai(g)) {
-        g->mode       = GAME_MODE_AI_THINKING;
-        g->ai_pending = true;
+    if (g->board.win_state != WIN_NONE) {
+        g->mode = GAME_MODE_GAME_OVER;
+    } else if (current_player_is_ai(g)) {
+        /* Reset per-turn search bookkeeping so the next game_ai_step starts a
+         * fresh search rather than picking up a stale half-completed one. */
+        g->mode               = GAME_MODE_AI_THINKING;
+        g->ai_pending         = true;
+        g->ai_thinking_frames = 0;
+        g->ai_next_depth      = 0;
+        g->ai_has_best        = false;
+    } else {
+        g->mode = GAME_MODE_FREE;
     }
+    /* Refresh (rather than just clear) so the cursor's hover preview kicks in
+     * against the now-live past state. Without this the player presses A,
+     * lands in FREE on an empty tile, and sees no visible change. */
+    game_refresh_highlights(g);
 }
 
 void game_title_select(GameState* g) {

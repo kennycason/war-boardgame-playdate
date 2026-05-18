@@ -188,6 +188,113 @@ static void test_commit_review_branch_noop_at_zero(void) {
     ASSERT_EQ(history_newest_turn(&g.history), hist_before);
 }
 
+/* Regression: scrubbing back to a snapshot where it's the AI's turn and then
+ * pressing A used to fall through into normal piece-selection logic. If the
+ * cursor happened to be over an AI piece, the player accidentally "selected"
+ * it (mode → PIECE_SELECTED) and the queued AI step never fired. */
+static void test_commit_review_to_ai_turn_via_action_a(void) {
+    GameState g;
+    game_init(&g);
+    g.settings.match     = MATCH_PVA;
+    g.settings.ai_player = PLAYER_WHITE;
+    g.settings.ai_level  = 3; /* depth 1, quick */
+    game_reset(&g);
+
+    /* Black (player) moves → AI's turn, then AI plays → back to black. */
+    g.cursor_x = 5; g.cursor_y = 2;
+    game_action_a(&g);
+    g.cursor_x = 6; g.cursor_y = 2;
+    game_action_a(&g);
+    ASSERT_EQ(g.mode, GAME_MODE_AI_THINKING);
+    int max_steps = 20, steps = 0;
+    while (!game_ai_step(&g) && steps < max_steps) steps++;
+    ASSERT_EQ(g.board.current_player, PLAYER_BLACK);
+
+    /* Scrub back to turn 1 (white = AI's turn) and place the cursor on a
+     * white piece so the old fall-through would have selected it. */
+    g.review_offset = -1;
+    g.cursor_x = 5; g.cursor_y = 8;
+    game_action_a(&g);
+
+    ASSERT_EQ(g.board.turn_count, 1);
+    ASSERT_EQ(g.board.current_player, PLAYER_WHITE);
+    ASSERT_EQ(g.mode, GAME_MODE_AI_THINKING);
+    ASSERT_TRUE(g.ai_pending);
+    ASSERT_EQ(g.selected_x, -1);
+    ASSERT_EQ(g.selected_y, -1);
+
+    /* AI should be able to step to completion. */
+    steps = 0;
+    while (!game_ai_step(&g) && steps < max_steps) steps++;
+    ASSERT_TRUE(steps < max_steps);
+    ASSERT_FALSE(g.ai_pending);
+    ASSERT_EQ(g.board.current_player, PLAYER_BLACK);
+}
+
+/* Commit to a snapshot of the player's own turn: A both commits AND selects
+ * the piece under the cursor (the legacy convenience path). */
+static void test_commit_review_to_player_turn_selects_piece(void) {
+    GameState g;
+    game_init(&g);
+    g.settings.match = MATCH_PVP;
+    game_reset(&g);
+    play_two_moves(&g);
+
+    /* Scrub back 1 turn → turn 1, white's turn in PvP. */
+    g.review_offset = -1;
+    g.cursor_x = 5; g.cursor_y = 8; /* white infantry exists here at turn 1 */
+    game_action_a(&g);
+
+    ASSERT_EQ(g.board.turn_count, 1);
+    ASSERT_EQ(g.board.current_player, PLAYER_WHITE);
+    ASSERT_EQ(g.mode, GAME_MODE_PIECE_SELECTED);
+    ASSERT_EQ(g.selected_x, 5);
+    ASSERT_EQ(g.selected_y, 8);
+    ASSERT_TRUE(g.num_valid_moves > 0);
+}
+
+/* Commit while the cursor is over an empty tile in the past state — should
+ * leave the player cleanly in FREE mode with the past state live, no stale
+ * selection, and the hover preview refreshed (no highlights since cursor is
+ * on an empty tile). */
+static void test_commit_review_with_empty_cursor_just_commits(void) {
+    GameState g;
+    game_init(&g);
+    g.settings.match = MATCH_PVP;
+    game_reset(&g);
+    play_two_moves(&g);
+
+    g.review_offset = -1;
+    g.cursor_x = 5; g.cursor_y = 5; /* empty middle tile */
+    game_action_a(&g);
+
+    ASSERT_EQ(g.review_offset, 0);
+    ASSERT_EQ(g.mode, GAME_MODE_FREE);
+    ASSERT_EQ(g.selected_x, -1);
+    ASSERT_EQ(g.board.tiles[5][5].highlight, HIGHLIGHT_NONE);
+}
+
+/* Hover preview is refreshed after commit — cursor on a piece in the past
+ * state shows that piece's move highlights, even though commit was triggered
+ * from outside game_action_a (so the legacy "A also selects" path doesn't
+ * run). */
+static void test_commit_review_refreshes_hover(void) {
+    GameState g;
+    game_init(&g);
+    g.settings.match = MATCH_PVP;
+    game_reset(&g);
+    play_two_moves(&g);
+
+    g.review_offset = -1; /* turn 1, white's turn */
+    g.cursor_x = 5; g.cursor_y = 8; /* white infantry */
+    game_commit_review_branch(&g);
+
+    ASSERT_EQ(g.mode, GAME_MODE_FREE);
+    ASSERT_EQ(g.board.tiles[5][8].highlight, HIGHLIGHT_SELECTED);
+    /* White infantry at (5,8) can step west to (4,8) on the default map. */
+    ASSERT_EQ(g.board.tiles[4][8].highlight, HIGHLIGHT_MOVE);
+}
+
 static void test_ai_step_eventually_finishes(void) {
     GameState g;
     game_init(&g);
@@ -338,6 +445,10 @@ void run_game_tests(void) {
     RUN(test_highlights_are_set_for_valid_moves);
     RUN(test_commit_review_branch_truncates_future);
     RUN(test_commit_review_branch_noop_at_zero);
+    RUN(test_commit_review_to_ai_turn_via_action_a);
+    RUN(test_commit_review_to_player_turn_selects_piece);
+    RUN(test_commit_review_with_empty_cursor_just_commits);
+    RUN(test_commit_review_refreshes_hover);
     RUN(test_ai_step_eventually_finishes);
     RUN(test_ai_step_walks_depths_in_order);
     RUN(test_ai_step_level_1_finishes_in_one_call);

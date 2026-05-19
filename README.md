@@ -1,4 +1,4 @@
-# War — Playdate
+# War - Playdate
 
 A chess-like, two-player strategy game for the Playdate. Capture the enemy
 commander or wipe out all their attack pieces to win.

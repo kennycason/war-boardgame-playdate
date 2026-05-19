@@ -361,23 +361,29 @@ static void draw_board(const Board* b, RenderMode rm, bool draw_cursor_flag,
 /* Top status: one 20x20 mini-tile per player with an infantry sprite (the
  * silhouette doubles as the team marker) and a score next to it. The active
  * player gets a thick frame; the inactive player has NO outline at all. In
- * Player vs AI mode the AI level (L1..L9) is shown to the far right. */
-static int draw_player_status(int x, int y, const GameState* g) {
+ * Player vs AI mode the AI level (L1..L9) is shown to the far right.
+ *
+ * `shown` is the board being displayed (live or a review snapshot) — scores
+ * and whose-turn-it-is read from there so scrubbing the crank rewinds the
+ * status bar too. */
+static int draw_player_status(int x, int y, const GameState* g, const Board* shown) {
     char buf[16];
     int slot_w  = 56;
     int blk_x   = x;
     int wht_x   = x + slot_w + 8;
     int tile_sz = 20;
 
-    bool active_mode = (g->mode != GAME_MODE_GAME_OVER
-                        && g->mode != GAME_MODE_TITLE);
-    bool blk_turn = (g->board.current_player == PLAYER_BLACK && active_mode);
-    bool wht_turn = (g->board.current_player == PLAYER_WHITE && active_mode);
+    /* A snapshot mid-game (win_state == NONE) always has an active player,
+     * even when the live game is over and we're scrubbing back through it. */
+    bool active_mode = (g->mode != GAME_MODE_TITLE
+                        && shown->win_state == WIN_NONE);
+    bool blk_turn = (shown->current_player == PLAYER_BLACK && active_mode);
+    bool wht_turn = (shown->current_player == PLAYER_WHITE && active_mode);
 
     /* Black tile + score */
     draw_piece_sprite(blk_x + 2, y + 2, PIECE_INFANTRY, PLAYER_BLACK);
     if (blk_turn) draw_thick_frame(blk_x, y, tile_sz + 1, tile_sz + 1);
-    snprintf(buf, sizeof(buf), "%d", g->board.black_score);
+    snprintf(buf, sizeof(buf), "%d", shown->black_score);
     pd->graphics->setFont(font_big);
     draw_text(buf, blk_x + tile_sz + 6, y + 1);
     pd->graphics->setFont(font_body);
@@ -385,7 +391,7 @@ static int draw_player_status(int x, int y, const GameState* g) {
     /* White tile + score */
     draw_piece_sprite(wht_x + 2, y + 2, PIECE_INFANTRY, PLAYER_WHITE);
     if (wht_turn) draw_thick_frame(wht_x, y, tile_sz + 1, tile_sz + 1);
-    snprintf(buf, sizeof(buf), "%d", g->board.white_score);
+    snprintf(buf, sizeof(buf), "%d", shown->white_score);
     pd->graphics->setFont(font_big);
     draw_text(buf, wht_x + tile_sz + 6, y + 1);
     pd->graphics->setFont(font_body);
@@ -486,7 +492,10 @@ static int draw_history_row(int x, int y, const Move* m) {
     return 18;
 }
 
-/* History panel: most-recent N moves at the top, scrolling backward. */
+/* History panel: most-recent N moves at the top, scrolling backward. While
+ * the player is scrubbing the crank, the panel is capped at the reviewed
+ * turn so "future" moves don't show — even though they're still retained in
+ * the buffer until A commits a branch. */
 static void draw_history_panel(int x, int y, int max_h, const GameState* g) {
     int line_h     = 18;
     int max_lines  = max_h / line_h;
@@ -494,7 +503,11 @@ static void draw_history_panel(int x, int y, int max_h, const GameState* g) {
 
     int newest = history_newest_turn(&g->history);
     int oldest = history_oldest_turn(&g->history);
-    int drawn  = 0;
+    if (g->review_offset < 0) {
+        int target = g->board.turn_count + g->review_offset;
+        if (target < newest) newest = target;
+    }
+    int drawn = 0;
 
     for (int turn = newest; turn > oldest && drawn < max_lines; turn--) {
         const Move* m = history_get_move(&g->history, turn);
@@ -509,7 +522,8 @@ static void draw_sidebar(GameState* g) {
     int x = SIDEBAR_X;
     int y = 4;
 
-    y = draw_player_status(x, y, g);
+    const Board* shown = game_visible_board(g);
+    y = draw_player_status(x, y, g, shown);
     pd->graphics->drawLine(x, y, x + SIDEBAR_W, y, 1, kColorBlack);
     y += 4;
 
